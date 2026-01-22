@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TabReset — Close tabs without losing them</title>
+  <meta name="description" content="A Chrome extension that summarizes your open tabs to a Markdown file, then closes them. Local AI, no cloud, your data stays yours.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header class="header">
+      <div class="logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="2" y="6" width="28" height="20" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
+          <line x1="10" y1="6" x2="10" y2="26" stroke="currentColor" stroke-width="2"/>
+          <line x1="2" y1="12" x2="10" y2="12" stroke="currentColor" stroke-width="2"/>
+          <circle cx="6" cy="9" r="1.5" fill="currentColor"/>
+          <line x1="14" y1="13" x2="26" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="14" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>TabReset</span>
+      </div>
+      <nav class="nav">
+        <a href="#how-it-works">How it works</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/aplucche/tabreset" class="nav-github">GitHub</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h1>You have 47 tabs open.<br>You'll never read most of them.</h1>
+      <p class="lede">TabReset summarizes your tabs to a Markdown file, then closes them. You get a searchable archive of everything. Your browser gets to breathe.</p>
+      <a href="https://github.com/aplucche/tabreset" class="cta">Get the extension</a>
+    </section>
+
+    <section class="problem">
+      <h2>The tab problem</h2>
+      <p>Tabs become a to-do list you never asked for. Each one represents something you meant to read, reference, or revisit. Closing them feels like giving up. So they pile up until your browser slows down and finding anything becomes impossible.</p>
+      <p>TabReset gives you permission to close tabs by making sure you won't lose them. One click: summarized, saved, closed.</p>
+    </section>
+
+    <section id="how-it-works" class="how-it-works">
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li>
+          <span class="step-num">1</span>
+          <div>
+            <strong>Pick a file</strong>
+            <p>Choose where to save your tab archive. It's just a Markdown file—open it in any text editor, Obsidian, Notion, wherever.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <div>
+            <strong>Click "Summarize & Reset"</strong>
+            <p>TabReset reads each tab, generates a one-line summary, and appends it to your file with the title, link, and timestamp.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <div>
+            <strong>Tabs close, archive grows</strong>
+            <p>Your browser is clean. Your archive is searchable. When you need that article from three weeks ago, grep for it.</p>
+          </div>
+        </li>
+      </ol>
+
+      <figure class="output-example">
+        <figcaption>What your archive looks like:</figcaption>
+        <div class="code-block">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Summary</th>
+                <th>Link</th>
+                <th>Closed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>React Server Components</td>
+                <td>Explains RSC architecture and when to use them</td>
+                <td><span class="link-placeholder">[link]</span></td>
+                <td>2026-01-21 14:30</td>
+              </tr>
+              <tr>
+                <td>Why we moved to Postgres</td>
+                <td>Team's migration from MongoDB, lessons learned</td>
+                <td><span class="link-placeholder">[link]</span></td>
+                <td>2026-01-21 14:30</td>
+              </tr>
+              <tr>
+                <td>CSS Container Queries</td>
+                <td>How container queries differ from media queries</td>
+                <td><span class="link-placeholder">[link]</span></td>
+                <td>2026-01-21 14:30</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </figure>
+    </section>
+
+    <section id="privacy" class="privacy">
+      <h2>Your tabs stay on your machine</h2>
+      <p>The AI runs locally in your browser using a small language model (<a href="https://huggingface.co/onnx-community/LFM2-350M-ONNX">LFM2-350M</a>). No servers. No accounts. No data leaves your computer.</p>
+      <p>The model downloads once (about 700MB), then everything happens offline. Your browsing history, reading habits, and tab contents are never transmitted anywhere.</p>
+
+      <div class="privacy-details">
+        <div class="detail">
+          <strong>Local processing</strong>
+          <p>Summarization happens in-browser via WebAssembly. The model runs on your CPU.</p>
+        </div>
+        <div class="detail">
+          <strong>Your files, your location</strong>
+          <p>You pick where to save. Desktop, Dropbox, a git repo—wherever makes sense for you.</p>
+        </div>
+        <div class="detail">
+          <strong>Append-only</strong>
+          <p>TabReset only adds to your file. It never reads, deletes, or modifies existing content.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="technical">
+      <h2>Under the hood</h2>
+      <p>TabReset prioritizes speed. Before running the LLM, it checks for meta descriptions and Open Graph tags—if a page already has a good summary, there's no need to generate one. For pages without metadata, it extracts article content and runs it through the model.</p>
+      <p>Built on <a href="https://huggingface.co/docs/transformers.js">Transformers.js</a> and the Chrome File System Access API. The extension is open source.</p>
+    </section>
+
+    <section class="closing">
+      <h2>Close your tabs. Keep the knowledge.</h2>
+      <a href="https://github.com/aplucche/tabreset" class="cta">View on GitHub</a>
+    </section>
+
+    <footer class="footer">
+      <p>TabReset is free and open source. <a href="https://github.com/aplucche/tabreset">GitHub</a></p>
+    </footer>
+  </main>
+</body>
+</html>
