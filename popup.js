@@ -3,22 +3,60 @@ import { pipeline, env } from '@huggingface/transformers';
 // Configuration
 env.allowLocalModels = false;
 env.useBrowserCache = true;
-// Disable loading of wasm files from remote CDN; point to local assets
 env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL('assets/wasm/');
 
 const MODEL_ID = 'onnx-community/LFM2-350M-ONNX';
-const LINK_REGEX = /\[.*?\]\(.*?\)/g; // Basic markdown link detection
+const DB_NAME = 'tabreset-db';
+const STORE_NAME = 'file-handles';
+const FILE_HANDLE_KEY = 'outputFile';
 
 // DOM Elements
 const statusText = document.getElementById('status-text');
 const progressBarContainer = document.getElementById('progress-bar-container');
 const progressBar = document.getElementById('progress-bar');
-const selectFileBtn = document.getElementById('select-file-btn');
+const fileSection = document.getElementById('file-section');
+const fileStatus = document.getElementById('file-status');
+const filePath = document.getElementById('file-path');
+const openFileBtn = document.getElementById('open-file-btn');
+const newFileBtn = document.getElementById('new-file-btn');
+const changeFileBtn = document.getElementById('change-file-btn');
 const runBtn = document.getElementById('run-btn');
 const logArea = document.getElementById('log');
 
 let fileHandle = null;
 let summarizer = null;
+
+// IndexedDB helpers for persisting file handle
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore(STORE_NAME);
+        };
+    });
+}
+
+async function saveFileHandle(handle) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(handle, FILE_HANDLE_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+async function loadFileHandle() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const request = tx.objectStore(STORE_NAME).get(FILE_HANDLE_KEY);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
 
 function log(msg) {
     logArea.textContent += msg + '\n';
@@ -27,24 +65,43 @@ function log(msg) {
 
 function setStatus(msg, progress = null) {
     statusText.textContent = msg;
-    if (progress !== null) {
+    if (progress !== null && progress > 0) {
         progressBarContainer.classList.remove('hidden');
         progressBar.style.width = `${progress}%`;
     } else {
         progressBarContainer.classList.add('hidden');
+        progressBar.style.width = '0%';
     }
+}
+
+function updateFileUI() {
+    if (fileHandle) {
+        fileStatus.classList.add('hidden');
+        filePath.classList.remove('hidden');
+        filePath.textContent = fileHandle.name;
+        openFileBtn.classList.add('hidden');
+        newFileBtn.classList.add('hidden');
+        changeFileBtn.classList.remove('hidden');
+    } else {
+        fileStatus.classList.remove('hidden');
+        filePath.classList.add('hidden');
+        openFileBtn.classList.remove('hidden');
+        newFileBtn.classList.remove('hidden');
+        changeFileBtn.classList.add('hidden');
+    }
+    checkReady();
 }
 
 // Initialize Model
 async function initModel() {
     try {
-        setStatus('Loading model... (this may take a while initially)');
+        setStatus('Loading model...');
 
         summarizer = await pipeline('text-generation', MODEL_ID, {
             dtype: 'fp32',
             progress_callback: (data) => {
-                if (data.status === 'progress') {
-                    setStatus(`Loading model... ${Math.round(data.progress || 0)}%`, data.progress);
+                if (data.status === 'progress' && data.progress > 0) {
+                    setStatus(`Loading model... ${Math.round(data.progress)}%`, data.progress);
                 }
             }
         });
@@ -59,8 +116,51 @@ async function initModel() {
     }
 }
 
+// Try to restore saved file handle
+async function restoreFileHandle() {
+    try {
+        const savedHandle = await loadFileHandle();
+        if (savedHandle) {
+            // Verify we still have permission
+            const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
+            if (permission === 'granted') {
+                fileHandle = savedHandle;
+                updateFileUI();
+                log(`Restored file: ${fileHandle.name}`);
+            } else if (permission === 'prompt') {
+                // Store handle but will need to request permission on first use
+                fileHandle = savedHandle;
+                updateFileUI();
+                log(`File available: ${fileHandle.name} (will request permission)`);
+            }
+        }
+    } catch (err) {
+        console.error('Could not restore file handle:', err);
+    }
+}
+
 // File Handling
-async function selectFile() {
+async function openExistingFile() {
+    try {
+        const [handle] = await window.showOpenFilePicker({
+            types: [{
+                description: 'Markdown File',
+                accept: { 'text/markdown': ['.md'] },
+            }],
+        });
+        fileHandle = handle;
+        await saveFileHandle(fileHandle);
+        updateFileUI();
+        log(`Opened: ${fileHandle.name}`);
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            console.error(err);
+            log('Error opening file: ' + err.message);
+        }
+    }
+}
+
+async function createNewFile() {
     try {
         fileHandle = await window.showSaveFilePicker({
             suggestedName: 'tabreset.md',
@@ -69,14 +169,13 @@ async function selectFile() {
                 accept: { 'text/markdown': ['.md'] },
             }],
         });
-        log(`File selected: ${fileHandle.name}`);
-        selectFileBtn.textContent = `Selected: ${fileHandle.name}`;
-        checkReady();
+        await saveFileHandle(fileHandle);
+        updateFileUI();
+        log(`Created: ${fileHandle.name}`);
     } catch (err) {
-        // User cancelled or error
         if (err.name !== 'AbortError') {
             console.error(err);
-            log('Error selecting file: ' + err.message);
+            log('Error creating file: ' + err.message);
         }
     }
 }
@@ -84,44 +183,100 @@ async function selectFile() {
 function checkReady() {
     if (summarizer && fileHandle) {
         runBtn.disabled = false;
+    } else {
+        runBtn.disabled = true;
     }
 }
 
-// Content Extraction
+// Content Extraction - optimized for speed
 function extractPageContent() {
-    // Simple heuristic: get main text, avoid scripts/styles
-    const body = document.body.innerText;
-    return body.slice(0, 10000); // Limit input size for speed
+    // Try meta description first (fastest, usually good summary)
+    const metaDesc = document.querySelector('meta[name="description"]')?.content;
+    const ogDesc = document.querySelector('meta[property="og:description"]')?.content;
+
+    if (metaDesc && metaDesc.length > 50) {
+        return { type: 'meta', content: metaDesc };
+    }
+    if (ogDesc && ogDesc.length > 50) {
+        return { type: 'meta', content: ogDesc };
+    }
+
+    // Try to find article content
+    const article = document.querySelector('article');
+    if (article) {
+        const text = article.innerText.trim();
+        if (text.length > 100) {
+            return { type: 'article', content: text.slice(0, 2000) };
+        }
+    }
+
+    // Fall back to main content area or body
+    const main = document.querySelector('main') || document.body;
+
+    // Get text content, filtering out scripts/styles
+    const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+    let text = '';
+    let node;
+    while ((node = walker.nextNode()) && text.length < 2500) {
+        const parent = node.parentElement;
+        if (parent && !['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) {
+            const chunk = node.textContent.trim();
+            if (chunk.length > 0) {
+                text += chunk + ' ';
+            }
+        }
+    }
+
+    return { type: 'body', content: text.trim().slice(0, 2000) };
+}
+
+// Append a single row to the file
+async function appendToFile(content) {
+    // Request permission if needed
+    const permission = await fileHandle.queryPermission({ mode: 'readwrite' });
+    if (permission !== 'granted') {
+        const requestResult = await fileHandle.requestPermission({ mode: 'readwrite' });
+        if (requestResult !== 'granted') {
+            throw new Error('File permission denied');
+        }
+    }
+
+    const file = await fileHandle.getFile();
+    const existingContent = await file.text();
+
+    let newContent = existingContent;
+
+    // Add header if file is empty
+    if (!existingContent.trim()) {
+        newContent = '| Title | Summary | Link | Closed |\n|---|---|---|---|\n';
+    }
+
+    newContent += content;
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(newContent);
+    await writable.close();
 }
 
 // Main Logic
 async function run() {
     runBtn.disabled = true;
-    selectFileBtn.disabled = true;
+    openFileBtn.disabled = true;
+    newFileBtn.disabled = true;
+    changeFileBtn.disabled = true;
 
     try {
         const tabs = await chrome.tabs.query({ currentWindow: true });
-        // Filter out internal pages and special URLs if needed, but for now take all "normal" tabs
-        const validTabs = tabs.filter(t => t.url && (t.url.startsWith('http') || t.url.startsWith('https')));
+        const validTabs = tabs.filter(t => t.url && (t.url.startsWith('http://') || t.url.startsWith('https://')));
 
         log(`Found ${validTabs.length} tabs to process.`);
 
-        let markdownContent = '';
-        const closedTabs = [];
-
-        // Check if file is empty to add header
-        const file = await fileHandle.getFile();
-        const text = await file.text();
-        if (!text.trim()) {
-            markdownContent += '| Title | Summary | Link | Closed |\n|---|---|---|---|\n';
-        } else {
-            // Ensure newline before appending
-            markdownContent += '\n';
-        }
+        let processedCount = 0;
 
         for (let i = 0; i < validTabs.length; i++) {
             const tab = validTabs[i];
-            setStatus(`Processing tab ${i + 1}/${validTabs.length}: ${tab.title.slice(0, 20)}...`);
+            const shortTitle = tab.title.length > 25 ? tab.title.slice(0, 25) + '...' : tab.title;
+            setStatus(`Processing ${i + 1}/${validTabs.length}: ${shortTitle}`);
 
             try {
                 // Extract content
@@ -130,65 +285,49 @@ async function run() {
                     func: extractPageContent,
                 });
 
-                if (!result || result.trim().length < 50) {
-                    log(`Skipping ${tab.title} (no content found)`);
+                if (!result || !result.content || result.content.length < 30) {
+                    log(`Skipping ${shortTitle} (no content)`);
                     continue;
                 }
 
-                // Summarize using text-generation (CausalLM)
-                // LFM2-350M-Extract likely benefits from a prompt or just raw input to extraction.
-                const prompt = `Summarize the following text:\n${result.slice(0, 2000)}\n\nSummary:`;
+                // Generate summary based on content type
+                let summary;
+                if (result.type === 'meta') {
+                    // Meta descriptions are already summaries, use directly
+                    summary = result.content;
+                } else {
+                    // Generate summary for longer content
+                    const prompt = `Summarize in one sentence:\n${result.content.slice(0, 1500)}\n\nSummary:`;
 
-                const summaryOutput = await summarizer(prompt, {
-                    max_new_tokens: 60,
-                    min_new_tokens: 10,
-                    do_sample: false, // Deterministic
-                    return_full_text: false // Only get the generated summary
-                });
+                    const summaryOutput = await summarizer(prompt, {
+                        max_new_tokens: 50,
+                        min_new_tokens: 10,
+                        do_sample: false,
+                        return_full_text: false
+                    });
 
-                let summary = summaryOutput[0]?.generated_text || "No summary generated";
-                summary = summary.trim();
+                    summary = summaryOutput[0]?.generated_text?.trim() || "No summary generated";
+                }
 
-                // Format
+                // Format row
                 const dateStr = new Date().toLocaleString();
-                markdownContent += `| ${tab.title.replace(/\|/g, '-')} | ${summary.replace(/\|/g, '-').replace(/\n/g, ' ')} | [Link](${tab.url}) | ${dateStr} |\n`;
+                const row = `| ${tab.title.replace(/\|/g, '-').replace(/\n/g, ' ')} | ${summary.replace(/\|/g, '-').replace(/\n/g, ' ')} | [Link](${tab.url}) | ${dateStr} |\n`;
 
-                closedTabs.push(tab.id);
+                // Write to file immediately
+                await appendToFile(row);
+                log(`Saved: ${shortTitle}`);
+
+                // Close tab immediately after writing
+                await chrome.tabs.remove(tab.id);
+                processedCount++;
 
             } catch (err) {
                 console.error(`Error processing tab ${tab.id}:`, err);
-                log(`Error processing ${tab.title}: ${err.message}`);
+                log(`Error: ${shortTitle} - ${err.message}`);
             }
         }
 
-        // Write to file
-        setStatus('Writing to file...');
-        const writable = await fileHandle.createWritable({ keepExistingData: true });
-        // File System Access API createWritable defaults to overwrite unless we append manually.
-        // Actually createWritable() gives a stream. We should append. using 'seek' or just read+concat (expensive)
-        // or just 'append' is NOT default. 'keepExistingData' was deprecated/removed or non-standard depending on impl.
-        // The standard way:
-        // const writable = await fileHandle.createWritable();
-        // await writable.write(existing + new); 
-        // Wait, efficient append:
-        // await writable.seek(offset); write...
-
-        // Let's re-read size to seek
-        const currentFileSize = (await fileHandle.getFile()).size;
-        const writableStream = await fileHandle.createWritable({ keepExistingData: true });
-        await writableStream.seek(currentFileSize);
-        await writableStream.write(markdownContent);
-        await writableStream.close();
-
-        log('File updated.');
-
-        // Close tabs
-        if (closedTabs.length > 0) {
-            setStatus(`Closing ${closedTabs.length} tabs...`);
-            await chrome.tabs.remove(closedTabs);
-        }
-
-        setStatus('Done!');
+        setStatus(`Done! Processed ${processedCount} tabs.`);
         log('All operations completed.');
 
     } catch (err) {
@@ -197,13 +336,19 @@ async function run() {
         log('Critical Error: ' + err.message);
     } finally {
         runBtn.disabled = false;
-        selectFileBtn.disabled = false;
+        openFileBtn.disabled = false;
+        newFileBtn.disabled = false;
+        changeFileBtn.disabled = false;
+        checkReady();
     }
 }
 
 // Event Listeners
-selectFileBtn.addEventListener('click', selectFile);
+openFileBtn.addEventListener('click', openExistingFile);
+newFileBtn.addEventListener('click', createNewFile);
+changeFileBtn.addEventListener('click', openExistingFile);
 runBtn.addEventListener('click', run);
 
 // Start
+restoreFileHandle();
 initModel();
