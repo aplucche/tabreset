@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TabReset — Close tabs without losing them</title>
+  <title>TabReset: Close tabs without losing them</title>
   <meta name="description" content="A Chrome extension that summarizes your open tabs to a Markdown file, then closes them. Local AI, no cloud, your data stays yours.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,13 +33,13 @@
 
     <section class="hero">
       <h1>You have 47 tabs open.<br>You'll never read most of them.</h1>
-      <p class="lede">TabReset summarizes your tabs to a Markdown file, then closes them. You get a searchable archive of everything. Your browser gets to breathe.</p>
+      <p class="lede">TabReset summarizes your tabs to a Markdown file, then closes them. You get a searchable archive. Your browser gets to breathe.</p>
       <a href="https://github.com/aplucche/tabreset" class="cta">Get the extension</a>
     </section>
 
     <section class="problem">
       <h2>The tab problem</h2>
-      <p>Tabs become a to-do list you never asked for. Each one represents something you meant to read, reference, or revisit. Closing them feels like giving up. So they pile up until your browser slows down and finding anything becomes impossible.</p>
+      <p>Tabs become a to-do list you never asked for. Each one is something you meant to read or come back to. Closing them feels like giving up. So they pile up until your browser slows down and finding anything becomes impossible.</p>
       <p>TabReset gives you permission to close tabs by making sure you won't lose them. One click: summarized, saved, closed.</p>
     </section>
 
@@ -50,7 +50,7 @@
           <span class="step-num">1</span>
           <div>
             <strong>Pick a file</strong>
-            <p>Choose where to save your tab archive. It's just a Markdown file—open it in any text editor, Obsidian, Notion, wherever.</p>
+            <p>Choose where to save your tab archive. It's a Markdown file. Open it in any text editor, Obsidian, or Notion.</p>
           </div>
         </li>
         <li>
@@ -108,8 +108,8 @@
 
     <section id="privacy" class="privacy">
       <h2>Your tabs stay on your machine</h2>
-      <p>The AI runs locally in your browser using a small language model (<a href="https://huggingface.co/onnx-community/LFM2-350M-ONNX">LFM2-350M</a>). No servers. No accounts. No data leaves your computer.</p>
-      <p>The model downloads once (about 700MB), then everything happens offline. Your browsing history, reading habits, and tab contents are never transmitted anywhere.</p>
+      <p>The AI runs locally in your browser using a small language model (<a href="https://huggingface.co/onnx-community/LFM2-350M-ONNX">LFM2-350M</a>). No servers, no accounts. Nothing leaves your computer.</p>
+      <p>The model downloads once (about 700MB), then everything happens offline. Your tab contents are never transmitted anywhere.</p>
 
       <div class="privacy-details">
         <div class="detail">
@@ -118,7 +118,7 @@
         </div>
         <div class="detail">
           <strong>Your files, your location</strong>
-          <p>You pick where to save. Desktop, Dropbox, a git repo—wherever makes sense for you.</p>
+          <p>You pick where to save. Desktop, Dropbox, a git repo. Wherever works.</p>
         </div>
         <div class="detail">
           <strong>Append-only</strong>
@@ -129,7 +129,7 @@
 
     <section class="technical">
       <h2>Under the hood</h2>
-      <p>TabReset prioritizes speed. Before running the LLM, it checks for meta descriptions and Open Graph tags—if a page already has a good summary, there's no need to generate one. For pages without metadata, it extracts article content and runs it through the model.</p>
+      <p>TabReset prioritizes speed. Before running the LLM, it checks for meta descriptions and Open Graph tags. If a page already has a good summary, it uses that instead. For pages without metadata, it extracts article content and runs it through the model.</p>
       <p>Built on <a href="https://huggingface.co/docs/transformers.js">Transformers.js</a> and the Chrome File System Access API. The extension is open source.</p>
     </section>
 
