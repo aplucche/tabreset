@@ -232,15 +232,6 @@ function extractPageContent() {
 
 // Append a single row to the file
 async function appendToFile(content) {
-    // Request permission if needed
-    const permission = await fileHandle.queryPermission({ mode: 'readwrite' });
-    if (permission !== 'granted') {
-        const requestResult = await fileHandle.requestPermission({ mode: 'readwrite' });
-        if (requestResult !== 'granted') {
-            throw new Error('File permission denied');
-        }
-    }
-
     const file = await fileHandle.getFile();
     const existingContent = await file.text();
 
@@ -266,6 +257,15 @@ async function run() {
     changeFileBtn.disabled = true;
 
     try {
+        // Request file permission upfront while user activation is valid
+        const permission = await fileHandle.queryPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') {
+            const requestResult = await fileHandle.requestPermission({ mode: 'readwrite' });
+            if (requestResult !== 'granted') {
+                throw new Error('File permission denied');
+            }
+        }
+
         const tabs = await chrome.tabs.query({ currentWindow: true });
         const validTabs = tabs.filter(t => t.url && (t.url.startsWith('http://') || t.url.startsWith('https://')));
 
